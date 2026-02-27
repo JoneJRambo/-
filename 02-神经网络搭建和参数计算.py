@@ -61,13 +61,15 @@ if __name__ == '__main__':
     net = net.to(device)
 
     # 创建输入数据并移到相同设备
-    input = torch.randn(1, 3).to(device)
+    result = torch.randn(5, 3).to(device)
+    # input = torch.randn(5, 3)
 
     # 获取输出
-    output = net(input)
+    output = net(result)
     print(output)
+    print(output.shape)
     # 获取网络结构
-    summary(net, (3,))
+    summary(net, (5,3), device='cuda')
 
 
 
