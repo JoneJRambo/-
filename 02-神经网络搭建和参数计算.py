@@ -52,6 +52,24 @@ class Net(nn.Module):
         return out1
 
 
+if __name__ == '__main__':
+    # 创建神经网络
+    net = Net()
+
+    # 一行代码：自动检测并移到可用设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    net = net.to(device)
+
+    # 创建输入数据并移到相同设备
+    input = torch.randn(1, 3).to(device)
+
+    # 获取输出
+    output = net(input)
+    print(output)
+    # 获取网络结构
+    summary(net, (3,))
+
+
 
 
 
