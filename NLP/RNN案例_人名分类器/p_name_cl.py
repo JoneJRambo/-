@@ -458,10 +458,9 @@ def plot_data():
 # TODO 4.模型预测
 # 名字数值化+张量化
 def name2tensor(name):
-    tensor_x = torch.zeros(1, n_letters)
-    for i in range(len(name)):
-        letter = name[i]
-        tensor_x[0][i] = letter_to_ix[letter]
+    tensor_x = torch.zeros(len(name), n_letters)
+    for i, letter in enumerate(name):
+        tensor_x[i][all_letters.find(letter)] = 1
 
     return tensor_x
 
@@ -474,10 +473,52 @@ def predict_rnn(name):
 
     with torch.no_grad():
         output, hn = model(tensor_x.unsqueeze(dim=0), model.init_hidden())
+        # print("output-->", output.shape)
+        # print("output-->", output)
+        # 从结果中取前3个国家名
+        topv, topi = torch.topk(output, k=3)
+        # print("topv-->", topv)  # [1, 3]
+        # print("topi-->", topi)  # [1, 3]
+        for idx in topi[0]:
+            # print(idx)  # 6,1,7
+            # 基于index下标得到国家名
+            country = categories[idx]
+            print("name-->", name, "country-->", country)
+
+# LSTM预测
+def predict_lstm(name):
+    tensor_x = name2tensor(name)
+    model = MyLSTM(input_size=n_letters, hidden_size=128, output_size=category_num)
+    model.load_state_dict(torch.load('../model/lstm_1.pth'))
+
+    with torch.no_grad():
+        output, hn, cn= model(tensor_x.unsqueeze(dim=0), model.init_hidden(), model.init_hidden())
+
+        topv, topi = torch.topk(output, k=3)
+        for idx in topi[0]:
+            country = categories[idx]
+            print("name-->", name, "country-->", country)
 
 
+# GRU预测
+def predict_gru(name):
+    tensor_x = name2tensor(name)
+    model = MyGRU(input_size=n_letters, hidden_size=128, output_size=category_num)
+    model.load_state_dict(torch.load('../model/gru_1.pth'))
 
-
+    with torch.no_grad():
+        output, hn = model(tensor_x.unsqueeze(dim=0), model.init_hidden())
+        # print("output-->", output.shape)
+        # print("output-->", output)
+        # 从结果中取前3个国家名
+        topv, topi = torch.topk(output, k=3)
+        # print("topv-->", topv)  # [1, 3]
+        # print("topi-->", topi)  # [1, 3]
+        for idx in topi[0]:
+            # print(idx)  # 6,1,7
+            # 基于index下标得到国家名
+            country = categories[idx]
+            print("name-->", name, "country-->", country)
 
 if __name__ == '__main__':
     # test_read_data()
@@ -485,4 +526,7 @@ if __name__ == '__main__':
     # train_rnn_model()
     # train_lstm_model()
     # train_gru_model()
-    plot_data()
+    # plot_data()
+    predict_rnn('Trump')
+    predict_lstm('Trump')
+    predict_gru('Trump')

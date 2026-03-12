@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     Q = torch.randn(1, 1, query_size)
     K = torch.randn(1, 1, key_size)
-    V = torch.randn(1, 32, value_size2)
+    V = torch.randn(1, value_size1, value_size2)
 
     my_attn = MyAttn(query_size, key_size, value_size1, value_size2, output_size)
     output, attn_weight = my_attn(Q, K, V)
