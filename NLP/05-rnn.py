@@ -79,7 +79,7 @@ def dm05():
     print('hn-->', hn)
 
 
-def dm06():.
+def dm06():
     rnn = nn.RNN(input_size=4, hidden_size=6, num_layers=2)
     input = torch.randn(3, 5, 4)
     h0 = torch.randn(2, 5, 6)
