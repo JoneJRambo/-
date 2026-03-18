@@ -32,6 +32,7 @@ def normalstring(s):
     # 返回结果
     return s
 
+
 # TODO 1.数据预处理
 # 加载数据
 def read_data():
@@ -74,23 +75,23 @@ def read_data():
     # print("len(french_word2index)-->", len(french_word2index))
 
     # 构建另外2个词表
-    english_index2word = {v: k for k,v in english_word2index.items()}
-    french_index2word = {v: k for k,v in french_word2index.items()}
+    english_index2word = {v: k for k, v in english_word2index.items()}
+    french_index2word = {v: k for k, v in french_word2index.items()}
     # 返回结果
     return english_word2index, english_index2word, english_word_n, \
-           french_word2index, french_index2word, french_word_n, my_pairs
+        french_word2index, french_index2word, french_word_n, my_pairs
 
 
 # 调用读取数据的函数
 english_word2index, english_index2word, english_word_n, \
-french_word2index, french_index2word, french_word_n, my_pairs = read_data()
-print('english_word2index-->', english_word2index)
+    french_word2index, french_index2word, french_word_n, my_pairs = read_data()
+# print('english_word2index-->', english_word2index)
 # print('english_index2word-->', english_index2word)
-print('english_word_n-->', english_word_n)
-print('french_word2index-->', french_word2index)
+# print('english_word_n-->', english_word_n)
+# print('french_word2index-->', french_word2index)
 # print('french_index2word-->', french_index2word)
-print('french_word_n-->', french_word_n)
-print('my_pairs-->', my_pairs[:10])
+# print('french_word_n-->', french_word_n)
+# print('my_pairs-->', my_pairs[:10])
 
 
 # 转换为Dataset
@@ -137,6 +138,7 @@ def test_mydataset():
         # print(idx, line)
         print('x-->', x, x.shape)  # [1, 8]，1句话，这句话有8个token
         print('y-->', y, y.shape)  # [1, 7]，1句话，这句话有7个token
+
 
 # 转换为DataLoader
 def test_dataloader():
@@ -222,7 +224,7 @@ class DecoderGRU(nn.Module):
         # print("embedded1-->", embedded.shape)               # [1, 1, 128]
         # 把激活后的数据送给gru模型
         output, hidden = self.gru(embedded, hidden)
-        # print('output-->', output.shape)                    # [1, 1, 256]
+        print('output-->', output.shape)  # [1, 1, 256]
         # 把output的结果送给线性层
         output = self.softmax(self.out(output[0]))
         # print('output-->', output.shape)                    # [1, 4345]
@@ -239,10 +241,10 @@ def test_decodergru():
     mydataloader = DataLoader(dataset=mydataset, batch_size=1, shuffle=True)
     # 准备模型
     # 编码器模型
-    encoder = EncoderGRU(vocab_size=english_word_n, input_size=128, hidden_size=256)
+    encoder = EncoderGRU(vocab_size=english_word_n, input_size=128, hidden_size=256).to(device)
     print("encoder-->", encoder)
     #  解码器模型
-    decoder = DecoderGRU(vocab_size=french_word_n, input_size=128, hidden_size=256)
+    decoder = DecoderGRU(vocab_size=french_word_n, input_size=128, hidden_size=256).to(device)
     print("decoder-->", decoder)
     # 让数据先经过编码器（编码），再经过解码器（解码）
     for x, y in mydataloader:
@@ -262,7 +264,7 @@ def test_decodergru():
             # 把tmp送给解码器
             # decoder(tmp, decoder.init_hidden())
             decoder_output, hidden = decoder(tmp, decoder.init_hidden())
-            print("decoder_output-->", decoder_output.shape)            # [1, 4345]
+            print("decoder_output-->", decoder_output.shape)  # [1, 4345]
             print("hidden-->", hidden.shape)
             break
         break
@@ -337,10 +339,10 @@ class AttnDecoderGRU(nn.Module):
 def test_attndecoder():
     mydataset = MyDataset(my_pairs=my_pairs)
     mydataloader = DataLoader(dataset=mydataset, batch_size=1, shuffle=True)
-    encoder = EncoderGRU(vocab_size=english_word_n, input_size=128, hidden_size=256)
+    encoder = EncoderGRU(vocab_size=english_word_n, input_size=128, hidden_size=256).to(device)
     print("encoder-->", encoder)
     #  解码器模型
-    decoder = AttnDecoderGRU(vocab_size=french_word_n, input_size=128, hidden_size=256)
+    decoder = AttnDecoderGRU(vocab_size=french_word_n, input_size=128, hidden_size=256).to(device)
     print("decoder-->", decoder)
     # 让数据先经过编码器（编码），再经过解码器（解码）
     for x, y in mydataloader:
@@ -397,7 +399,7 @@ def train_iter(x, y, encoder, decoder, encoder_optim, decoder_optim, criterion):
     # print("encoder_output_c-->", encoder_output_c)
 
     # 定义是否使用teacher_forcing策略
-    use_teacher_forcing = True if random.random() < 0.5 else False
+    use_teacher_forcing = True if random.random() < 1 else False
     y_len = y.shape[1]
     loss = 0
     if use_teacher_forcing:
@@ -406,14 +408,15 @@ def train_iter(x, y, encoder, decoder, encoder_optim, decoder_optim, criterion):
         for i in range(y_len):
             # 解码器开始逐个token解码（前向传播）
             decoder_output, decoder_hidden, attn_weights = decoder(tensor_x, decoder_hidden, encoder_output_c)
-            # print("decoder_output-->", decoder_output, decoder_output.shape)
+            print("decoder_output-->", decoder_output, decoder_output.shape)
             # 计算损失
             target_y = y[0][i].reshape(1)
-            # print("target_y-->", target_y, target_y.shape)
+            print("target_y-->", target_y, target_y.shape)
             loss += criterion(decoder_output, target_y)
             # print("loss1-->", loss)
             # 把真确答案给到模型，进行下一轮的训练
             tensor_x = y[0][i].reshape(1, 1)
+            break
     else:
         # 不走teacher_forcing策略
         for i in range(y_len):
@@ -463,7 +466,7 @@ def train_seq2seq():
     encoder_optim = optim.Adam(params=encoder.parameters(), lr=mylr)
     decoder_optim = optim.Adam(params=decoder.parameters(), lr=mylr)
     # 轮次
-    epochs = 1
+    epochs = 20
     # 参数
     plot_loss_list = []
     print_loss_total = 0
@@ -559,16 +562,17 @@ def seq2seq_evaluate(x, encoder, decoder):
 def predict_seq2seq():
     # 准备模型
     encoder = EncoderGRU(vocab_size=english_word_n, input_size=128, hidden_size=256)
-    encoder.load_state_dict(torch.load('./model/encoder_1.pth'))
+    encoder.load_state_dict(torch.load('./model/encoder_20.pth'))
     encoder.to(device=device)
     decoder = AttnDecoderGRU(vocab_size=french_word_n, input_size=128, hidden_size=256)
-    decoder.load_state_dict(torch.load('./model/decoder_1.pth'))
+    decoder.load_state_dict(torch.load('./model/decoder_20.pth'))
     decoder.to(device=device)
     # 准备数据
     my_pairs = [
-      ['i m impressed with your french .', 'je suis impressionne par votre francais .'],
-      ['i m more than a friend .', 'je suis plus qu une amie .'],
-      ['she is beautiful like her mother .', 'elle est belle comme sa mere .']
+        ['i m impressed with your french .', 'je suis impressionne par votre francais .'],
+        ['i m more than a friend .', 'je suis plus qu une amie .'],
+        ['she is beautiful like her mother .', 'elle est belle comme sa mere .'],
+        ['i like music', 'je aime la musique']
     ]
     # 遍历
     for idx, pair in enumerate(my_pairs):
@@ -601,3 +605,4 @@ if __name__ == '__main__':
     # train_seq2seq()
     # draw()
     predict_seq2seq()
+
