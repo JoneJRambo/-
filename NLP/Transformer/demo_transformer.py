@@ -186,16 +186,16 @@ class MultiHeadedAttention(nn.Module):
         # 以便在多头注意力机制中并行计算。
         query, key, value = [model(x).view(batch_size, -1, self.head, self.d_k).transpose_(1, 2) for model, x in
                              zip(self.linears, (query, key, value))]
-        print("query-->", query.shape)
-        print("key-->", key.shape)
-        print("value-->", value.shape)
+        # print("query-->", query.shape)
+        # print("key-->", key.shape)
+        # print("value-->", value.shape)
         # 执行多头注意力并行计算
         x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
-        print("x0-->", x.shape)
+        # print("x0-->", x.shape)
         # 对x进行维度变换
         # x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.head * self.d_k)
         x = x.transpose(1, 2).reshape(batch_size, -1, self.embed_dim)
-        print("x1-->", x.shape)
+        # print("x1-->", x.shape)
         # 通过线性层
         x = self.linears[-1](x)  # clone中最后一个线性层
         return x
@@ -471,7 +471,139 @@ def test_decoder_layer():
     print("decoder_layer_result-->", decoder_layer_result.shape)
 
 
+class Decoder(nn.Module):
+    def __init__(self, layer, N):
+        super().__init__()
+        # 创建多个解码器层
+        self.layers = clone(layer, N)
+        # 创建一个规范化层
+        self.norm = LayerNormalization(features=layer.size)
+        self.N = N
+        self.size = layer.size
+
+    def forward(self, x, memory, src_mask, tgt_mask):
+        # 循环调用多个解码器层
+        for i in range(self.N):
+            x = self.layers[i](x, memory, src_mask, tgt_mask)
+        # 经过规范化层后返回
+        return self.norm(x)
+
+
+def test_decoder():
+    memory = test_encoder()
+    x = torch.tensor([[100, 2, 421, 508], [491, 998, 1, 221]])
+    print("decoder_x-->", x, x.shape)
+    embedding = Embeddings(vocab_size=1000, d_model=512)
+    x = embedding(x)
+    print("embedded-->", x.shape)
+    pe = PositionalEncoding(d_model=512, dropout=0.1, max_len=100)
+    pe_result = pe(x)
+    print("decoder_pe_result-->", pe_result.shape)
+    query = key = value = pe_result
+    src_mask = tgt_mask = mask = torch.zeros(8, 4, 4)
+    self_attn = src_attn = mha = MultiHeadedAttention(head=8, embed_dim=512)
+    pwff = PositionWiseFeedForward(d_model=512, d_ff=2048)
+    c = copy.deepcopy
+    decoder = Decoder(
+        layer=DecoderLayer(size=512, self_attn=c(self_attn), src_attn=c(src_attn), feed_forward=c(pwff), dropout=0.1),
+        N=6)
+    print(decoder)
+    decoder_result = decoder(x, memory, src_mask, tgt_mask)
+    print("decoder_result-->", decoder_result.shape)
+    return decoder_result
+
+
 # TODO 4.输出部分
+
+class Generator(nn.Module):
+    def __init__(self, d_model, vocab_size):
+        super().__init__()
+        self.d_model = d_model
+        self.vocab_size = vocab_size
+        self.linear = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        # x就是解码器输出
+        # 让x经过线性层+softmax
+        return torch.log_softmax(self.linear(x), dim=-1)
+
+
+def test_generator():
+    # 获取解码器输出
+    decoder_result = test_decoder()
+    generator = Generator(d_model=512, vocab_size=1000)
+    generator_result = generator(decoder_result)
+    print("generator_result-->", generator_result.shape)
+    return generator_result
+
+
+# TODO Transformer架构代码实现
+class Transformer(nn.Module):
+    def __init__(self, encoder, decoder, src_embed, tgt_embed, generator):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed  # 源文本 编码器输入 等价于InputEmbedding + PositionalEncoding
+        self.tgt_embed = tgt_embed  # 目标文本 解码器输入 等价于InputEmbedding + PositionalEncoding
+        self.tgt_embed = tgt_embed
+        self.generator = generator
+
+    def forward(self, src, tgt, src_mask1, src_mask2, tgt_mask):
+        # src: 源文本,比如[2, 4]
+        # tgt: 目标文本,比如[2, 6]
+        # src_mask1: 编码器的掩码
+        # src_mask2: 解码器的掩码(掩盖多头交叉注意力)
+        # tgt_mask: 解码器的掩码(掩盖多头自注意力)
+        src_embed = self.src_embed(src)
+        tgt_embed = self.tgt_embed(tgt)
+        # 获取编码器的输出
+        memory = self.encoder(src_embed, src_mask1)
+        # 获取解码器的输出
+        x = self.decoder(tgt_embed, memory, src_mask2, tgt_mask)
+        # 获取生成器的输出
+        return self.generator(x)
+
+
+def test_transformer():
+    # 1.实例化编码器对象
+    # 实例化多头自注意力对象
+    mha = MultiHeadedAttention(head=8, embed_dim=512)
+    # 实例化前馈全连接层对象
+    pwff = PositionWiseFeedForward(d_model=512, d_ff=2048)
+    encoder_layer = EncoderLayer(size=512, self_attn=mha, feed_forward=pwff, dropout=0.1)
+    encoder = Encoder(layer=encoder_layer, N=6)
+
+    # 2.实例化解码器对象
+    self_attn = copy.deepcopy(mha)
+    src_attn = copy.deepcopy(mha)
+    decoder_pwff = PositionWiseFeedForward(d_model=512, d_ff=2048)
+    decoder_layer = DecoderLayer(size=512, self_attn=self_attn, src_attn=src_attn, feed_forward=decoder_pwff,
+                                 dropout=0.1)
+    decoder = Decoder(layer=decoder_layer, N=6)
+
+    # 3.实例化输入嵌入层对象
+    encoder_embedded = Embeddings(vocab_size=1000, d_model=512)
+    encoder_pe = PositionalEncoding(d_model=512, dropout=0.1, max_len=100)
+    src_embed = nn.Sequential(encoder_embedded, encoder_pe)
+
+    tgt_embedded = Embeddings(vocab_size=2000, d_model=512)
+    tgt_pe = PositionalEncoding(d_model=512, dropout=0.1, max_len=100)
+    tgt_embed = nn.Sequential(tgt_embedded, tgt_pe)
+
+    generator = Generator(d_model=512, vocab_size=2000)
+    transformer = Transformer(encoder=encoder, decoder=decoder, src_embed=src_embed, tgt_embed=tgt_embed,
+                              generator=generator)
+    print("transformer-->", transformer)
+
+    source = torch.tensor([[1, 2, 3, 4],
+                           [5, 6, 7, 8]])
+    target = torch.tensor([[9, 10, 11, 12, 13],
+                           [13, 14, 15, 16, 17]])
+    src_mask1 = torch.zeros(8, 4, 4)
+    src_mask2 = torch.zeros(8, 5, 4)
+    tgt_mask = torch.zeros(8, 5, 5)
+    transformer_result = transformer(source, target, src_mask1, src_mask2, tgt_mask)
+    print("transformer_result-->", transformer_result.shape)
 
 
 if __name__ == '__main__':
@@ -486,4 +618,7 @@ if __name__ == '__main__':
     # test_sublayer_connection()
     # test_encoder_layer()
     # test_encoder()
-    test_decoder_layer()
+    # test_decoder_layer()
+    # test_decoder()
+    # test_generator()
+    test_transformer()
